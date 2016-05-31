@@ -1,46 +1,43 @@
 #include <cassert>
-#include <iostream>
+#include <ostream>
 
 namespace mod {
 
-template <unsigned LogPrecision, unsigned BitWidth>
-Integer<LogPrecision, BitWidth> Integer<LogPrecision, BitWidth>::add(
-    const Integer<LogPrecision, BitWidth> &other) const {
-  std::bitset<kBitWidth + kPrecision> has_carry_viable, no_carry_viable;
-  for (unsigned i = 0; i < kPrecision; i++)
-    no_carry_viable.set(i);
+template <unsigned Precision, unsigned BitWidth>
+Integer<Precision, BitWidth> Integer<Precision, BitWidth>::add(
+    const Integer<Precision, BitWidth> &other) const {
+  std::bitset<kBitWidth> has_carry_viable, no_carry_viable;
 
   SelfTy result;
 
-  const unsigned carry_bit_mask = 1 << (LogPrecision + 1);
-  const uint64_t result_mask = kPrecision - 1;
+  const unsigned carry_bit_mask = kPrecisionStates;
+  const uint64_t result_mask = kPrecisionStates - 1;
 
   for (unsigned bit_i = 0; bit_i < kBitWidth; bit_i++) {
-    uint64_t viable_lhs = 0, viable_rhs = 0;
     auto &viables = result._value[bit_i];
     for (uint64_t viable_lhs = get_first_viable(bit_i);
-         viable_lhs != kPrecision;
+         viable_lhs != kPrecisionStates;
          viable_lhs = get_next_viable(bit_i, viable_lhs)) {
       bool found_one = false;
       for (uint64_t viable_rhs = other.get_first_viable(bit_i);
-           viable_rhs != kPrecision;
+           viable_rhs != kPrecisionStates;
            viable_rhs = other.get_next_viable(bit_i, viable_rhs)) {
         found_one = true;
-        if (no_carry_viable[bit_i]) {
+        if (bit_i < kPrecision || no_carry_viable.test(bit_i - kPrecision)) {
           uint64_t result = viable_lhs + viable_rhs;
           viables.set(result & result_mask);
           if (result & carry_bit_mask)
-            has_carry_viable.set(bit_i + kPrecision);
+            has_carry_viable.set(bit_i);
           else
-            no_carry_viable.set(bit_i + kPrecision);
+            no_carry_viable.set(bit_i);
         }
-        if (has_carry_viable[bit_i]) {
+        if (bit_i >= kPrecision && has_carry_viable.test(bit_i - kPrecision)) {
           uint64_t result = viable_lhs + viable_rhs + 1;
           viables.set(result & result_mask);
           if (result & carry_bit_mask)
-            has_carry_viable.set(bit_i + kPrecision);
+            has_carry_viable.set(bit_i);
           else
-            no_carry_viable.set(bit_i + kPrecision);
+            no_carry_viable.set(bit_i);
         }
       }
       if (!found_one)
@@ -51,10 +48,9 @@ Integer<LogPrecision, BitWidth> Integer<LogPrecision, BitWidth>::add(
   return result;
 }
 
-
-template <unsigned LogPrecision, unsigned BitWidth>
-Integer<LogPrecision, BitWidth>
-Integer<LogPrecision, BitWidth>::left_shift(unsigned amount) const {
+template <unsigned Precision, unsigned BitWidth>
+Integer<Precision, BitWidth>
+Integer<Precision, BitWidth>::left_shift(unsigned amount) const {
   assert(amount != 0 && amount < BitWidth && "Out of bounds shift!");
 
   SelfTy result;
@@ -67,33 +63,32 @@ Integer<LogPrecision, BitWidth>::left_shift(unsigned amount) const {
   return result;
 }
 
-template <unsigned LogPrecision, unsigned BitWidth>
-void Integer<LogPrecision, BitWidth>::coerce_bit(unsigned bit_idx,
-                                                 bool *known_one,
-                                                 bool *known_zero) const {
+template <unsigned Precision, unsigned BitWidth>
+void Integer<Precision, BitWidth>::coerce_bit(unsigned bit_idx, bool *known_one,
+                                              bool *known_zero) const {
   if (known_zero)
     *known_zero = true;
   if (known_one)
     *known_one = true;
 
   if (known_one)
-    for (unsigned i = 0; i < (kPrecision >> 1); ++i)
+    for (unsigned i = 0; i < (kPrecisionStates >> 1); ++i)
       if (_value[bit_idx].test(i)) {
         *known_one = false;
         break;
       }
 
   if (known_zero)
-    for (unsigned i = (kPrecision >> 1); i < kPrecision; ++i)
+    for (unsigned i = (kPrecisionStates >> 1); i < kPrecisionStates; ++i)
       if (_value[bit_idx].test(i)) {
         *known_zero = false;
         break;
       }
 }
 
-template <unsigned LogPrecision, unsigned BitWidth>
-Integer<LogPrecision, BitWidth> Integer<LogPrecision, BitWidth>::multiply(
-    const Integer<LogPrecision, BitWidth> &other) const {
+template <unsigned Precision, unsigned BitWidth>
+Integer<Precision, BitWidth> Integer<Precision, BitWidth>::multiply(
+    const Integer<Precision, BitWidth> &other) const {
   SelfTy result(0);
   for (unsigned bit_idx = 0; bit_idx < kBitWidth; bit_idx++) {
     bool known_zero;
@@ -104,43 +99,53 @@ Integer<LogPrecision, BitWidth> Integer<LogPrecision, BitWidth>::multiply(
   return result;
 }
 
-template <unsigned LogPrecision, unsigned BitWidth>
-void Integer<LogPrecision, BitWidth>::read(const std::string &val) {
+template <unsigned Precision, unsigned BitWidth>
+bool Integer<Precision, BitWidth>::admits_u64(
+    typename std::enable_if<kBitWidth == 64, uint64_t>::type element) const {
+  for (unsigned bit_idx = 0; bit_idx < kBitWidth; bit_idx++) {
+    uint64_t adjusted =
+        (element << (kBitWidth - bit_idx - 1)) >> (kBitWidth - kPrecision);
+    assert(adjusted < kPrecisionStates && "Bad bit math!");
+    if (!_value[bit_idx].test(adjusted))
+      return false;
+  }
+  return true;
+}
+
+template <unsigned Precision, unsigned BitWidth>
+void Integer<Precision, BitWidth>::read(const std::string &val) {
   assert(val.length() <= kBitWidth && "Input too big!");
 
-  std::bitset<kPrecision> viability_mask;
+  std::bitset<kPrecisionStates> viability_mask;
   viability_mask.set(0);
 
-  for (unsigned i = val.length(); i != 0; --i) {
-    char c = val[i - 1];
-    assert(c == '0' || c == '1' || c == 'u');
-    unsigned bit_idx = val.length() - i;
-
-    bool maybe_zero = c == '0' || c == 'u';
-    bool maybe_one = c == '1' || c == 'u';
-
-    unsigned trailing_mask = 1 << (kLogPrecision - bit_idx);
-
-    for (unsigned i = 0; i < kPrecision; ++i) {
+  auto iterate_once = [&](unsigned bit_idx, bool is_one, bool is_zero) {
+    for (unsigned i = 0; i < kPrecisionStates; ++i) {
       if (viability_mask.test((i >> 1) << 1) ||
           viability_mask.test(((i >> 1) << 1) | 1)) {
-        if (maybe_one)
-          _value[bit_idx].set((i >> 1) | (1 << (kLogPrecision - 1)));
-        if (maybe_zero)
+        if (is_one)
+          _value[bit_idx].set((i >> 1) | (1 << (kPrecision - 1)));
+        if (is_zero)
           _value[bit_idx].set(i >> 1);
       }
     }
 
     viability_mask = _value[bit_idx];
+  };
+
+  for (unsigned i = val.length(); i != 0; --i) {
+    char c = val[i - 1];
+    assert(c == '0' || c == '1' || c == 'u');
+    iterate_once(val.length() - i, c == '1' || c == 'u', c == '0' || c == 'u');
   }
 
   for (unsigned i = val.length(); i < kBitWidth; i++)
-    _value[i].set(0);
+    iterate_once(i, false, true);
 }
 
-
-template <unsigned LogPrecision, unsigned BitWidth>
-std::string Integer<LogPrecision, BitWidth>::write() const {
+template <unsigned Precision, unsigned BitWidth>
+std::string
+Integer<Precision, BitWidth>::write(bool trim_leading_zeroes) const {
   std::string result(kBitWidth, 'X');
   for (int bit_idx = 0; bit_idx < kBitWidth; ++bit_idx) {
     bool known_one, known_zero;
@@ -157,7 +162,34 @@ std::string Integer<LogPrecision, BitWidth>::write() const {
     }();
   }
 
+  if (trim_leading_zeroes) {
+    std::size_t start_index = result.find_first_not_of('0');
+    if (start_index != std::string::npos)
+      result = result.substr(start_index);
+  }
+
   return result;
+}
+
+template <unsigned Precision, unsigned BitWidth>
+void Integer<Precision, BitWidth>::print_raw(std::ostream &out,
+                                             bool trim_leading_zeroes,
+                                             const char *header) const {
+  if (header)
+    out << header << "\n";
+  unsigned length = kBitWidth;
+  if (trim_leading_zeroes) {
+    std::bitset<kBitWidth> only_zero;
+    only_zero.set(0);
+    while (length > 0 && _value[length - 1] == only_zero)
+      length--;
+    if (length != kBitWidth)
+      length++;
+  }
+
+  for (unsigned i = 0; i < length; i++) {
+    out << _value[i] << " : " << i  << "\n";
+  }
 }
 
 template <unsigned A, unsigned B>
