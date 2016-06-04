@@ -40,6 +40,15 @@ public:
       __ctx.check_passed();                                                    \
   } while (false)
 
+#define ASSERT_FALSE(v)                                                        \
+  do {                                                                         \
+    const char *msg = "Negate(" #v ") failed (expected false, was true)";      \
+    if (v)                                                                     \
+      __ctx.check_failed(msg, __LINE__, __FILE__, __func__);                   \
+    else                                                                       \
+      __ctx.check_passed();                                                    \
+  } while (false)
+
 #define ASSERT_EQ(v0, v1)                                                      \
   do {                                                                         \
     const char *msg = "equality failed, expected " #v0 " == " #v1;             \
@@ -54,7 +63,7 @@ public:
 typedef Integer<6, 64> Int64;
 
 static void test_additions() {
-  TEST("Additions");
+  TEST("Add");
 
   {
     Int64 a("00u"), b("001"), c("001");
@@ -69,8 +78,35 @@ static void test_additions() {
     ASSERT_TRUE(bin_57.admits(57));
     ASSERT_TRUE(bin_133.admits(133));
     ASSERT_TRUE(bin_190.admits(190));
-    ASSERT_EQ(bin_57.add(bin_133), bin_190);
-    ASSERT_TRUE(bin_57.add(bin_133).admits(190));
+    auto sum_57_133 = bin_57.add(bin_133);
+    ASSERT_EQ(sum_57_133, bin_190);
+
+    ASSERT_TRUE(sum_57_133.admits(190));
+
+    ASSERT_FALSE(sum_57_133.admits(191));
+    ASSERT_FALSE(sum_57_133.admits(2191));
+    ASSERT_FALSE(sum_57_133.admits(382));
+    ASSERT_FALSE(sum_57_133.admits(95));
+  }
+
+  {
+    // Similar to above, but now we have unknown bits.
+
+    Int64 bin_57("11u0u1"), bin_133("u000010u");
+    ASSERT_TRUE(bin_57.admits(57));
+    ASSERT_TRUE(bin_133.admits(133));
+    auto sum_57_133 = bin_57.add(bin_133);
+
+    ASSERT_TRUE(sum_57_133.admits(190));
+
+    // sum_57_133 is more precise than uuuuuuuu, but textually it "looks like"
+    // uuuuuuuu.  E.g. uuuuuuuu as written admits both 200 and 95, but
+    // sum_57_133 does not.
+    ASSERT_EQ(sum_57_133.write(), "uuuuuuuu");
+
+    ASSERT_FALSE(sum_57_133.admits(2191));
+    ASSERT_FALSE(sum_57_133.admits(200));
+    ASSERT_FALSE(sum_57_133.admits(95));
   }
 }
 

@@ -87,19 +87,6 @@ void Integer<Precision, BitWidth>::coerce_bit(unsigned bit_idx, bool *known_one,
 }
 
 template <unsigned Precision, unsigned BitWidth>
-Integer<Precision, BitWidth> Integer<Precision, BitWidth>::multiply(
-    const Integer<Precision, BitWidth> &other) const {
-  SelfTy result(0);
-  for (unsigned bit_idx = 0; bit_idx < kBitWidth; bit_idx++) {
-    bool known_zero;
-    other.coerce_bit(bit_idx, nullptr, &known_zero);
-    if (!known_zero)
-      result = result.add(bit_idx ? this->left_shift(bit_idx) : *this);
-  }
-  return result;
-}
-
-template <unsigned Precision, unsigned BitWidth>
 bool Integer<Precision, BitWidth>::admits_u64(
     typename std::enable_if<kBitWidth == 64, uint64_t>::type element) const {
   for (unsigned bit_idx = 0; bit_idx < kBitWidth; bit_idx++) {

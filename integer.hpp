@@ -66,7 +66,6 @@ public:
 
   SelfTy add(const SelfTy &other) const;
   SelfTy left_shift(unsigned amount) const;
-  SelfTy multiply(const SelfTy &other) const;
 
   void coerce_bit(unsigned bit_idx, bool *known_one, bool *know_zero) const;
   bool admits_u64(
