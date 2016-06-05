@@ -4,10 +4,68 @@
 #include <array>
 #include <bitset>
 #include <cassert>
+#include <iterator>
 #include <string>
 #include <type_traits>
 
 namespace mod {
+
+template <std::size_t N>
+class SetBitIterator
+    : public std::iterator<std::forward_iterator_tag, uint64_t, uint64_t,
+                           const uint64_t *, const uint64_t &> {
+  const std::bitset<N> &_parent;
+  uint64_t _current_value;
+
+  uint64_t first_set_bit_after(uint64_t start) const {
+    while (start < N && !_parent.test(start))
+      start++;
+    return start;
+  }
+
+public:
+  SetBitIterator(const std::bitset<N> &parent, bool is_begin)
+      : _parent(parent) {
+    _current_value = is_begin ? first_set_bit_after(0) : N;
+  }
+
+  typedef SetBitIterator<N> SelfTy;
+
+  SelfTy operator++() {
+    SelfTy i = *this;
+    _current_value = first_set_bit_after(_current_value + 1);
+    return i;
+  }
+
+  SelfTy operator++(int pre_inc_baton) {
+    _current_value = first_set_bit_after(_current_value + 1);
+    return *this;
+  }
+
+  reference operator*() { return _current_value; }
+  pointer operator->() { return &_current_value; }
+  bool operator==(const SelfTy &rhs) {
+    assert(&_parent == rhs._parent && "Bad iterator comparision!");
+    return _current_value == rhs._current_value;
+  }
+  bool operator!=(const SelfTy &rhs) {
+    assert(&_parent == rhs._parent && "Bad iterator comparision!");
+    return _current_value != rhs._current_value;
+  }
+};
+
+template <typename IteratorTy> struct Range {
+  IteratorTy _begin, _end;
+
+  IteratorTy begin() { return _begin; }
+  IteratorTy end() { return _end; }
+};
+
+template <std::size_t N>
+Range<SetBitIterator<N>> set_bits(const std::bitset<N> &bitset) {
+  return Range<SetBitIterator<N>>(
+      {SetBitIterator<N>(bitset, true), SetBitIterator<N>(bitset, false)});
+}
 
 /// This is a class capable of reasoning about partially known integers.  For
 /// every bit we have precise knowledge of \p Precision trailing bits, and we
@@ -43,26 +101,6 @@ public:
 
   bool operator==(const SelfTy &other) const { return _value == other._value; }
   bool operator!=(const SelfTy &other) const { return _value != other._value; }
-
-  unsigned get_next_viable(unsigned bit_idx, unsigned previous) const {
-    for (uint64_t i = (previous + 1), e = kPrecisionStates; i < e; i++)
-      if (_value[bit_idx].test(i))
-        return i;
-
-    return kPrecisionStates;
-  }
-
-  uint64_t get_first_viable(unsigned bit_idx) const {
-    return get_next_viable(bit_idx, (unsigned)-1);
-  }
-
-  void set_viable(unsigned bit_idx, unsigned value) {
-    _value[bit_idx].set(value);
-  }
-
-  void clear_viable(unsigned bit_idx, uint64_t value) {
-    _value[bit_idx].reset(value);
-  }
 
   SelfTy add(const SelfTy &other) const;
   SelfTy left_shift(unsigned amount) const;

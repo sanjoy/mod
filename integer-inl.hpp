@@ -15,13 +15,9 @@ Integer<Precision, BitWidth> Integer<Precision, BitWidth>::add(
 
   for (unsigned bit_i = 0; bit_i < kBitWidth; bit_i++) {
     auto &viables = result._value[bit_i];
-    for (uint64_t viable_lhs = get_first_viable(bit_i);
-         viable_lhs != kPrecisionStates;
-         viable_lhs = get_next_viable(bit_i, viable_lhs)) {
+    for (uint64_t viable_lhs : set_bits(_value[bit_i])) {
       bool found_one = false;
-      for (uint64_t viable_rhs = other.get_first_viable(bit_i);
-           viable_rhs != kPrecisionStates;
-           viable_rhs = other.get_next_viable(bit_i, viable_rhs)) {
+      for (uint64_t viable_rhs : set_bits(other._value[bit_i])) {
         found_one = true;
         if (bit_i < kPrecision || no_carry_viable.test(bit_i - kPrecision)) {
           uint64_t result = viable_lhs + viable_rhs;
