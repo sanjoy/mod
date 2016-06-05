@@ -16,9 +16,7 @@ Integer<Precision, BitWidth> Integer<Precision, BitWidth>::add(
   for (unsigned bit_i = 0; bit_i < kBitWidth; bit_i++) {
     auto &viables = result._value[bit_i];
     for (uint64_t viable_lhs : set_bits(_value[bit_i])) {
-      bool found_one = false;
       for (uint64_t viable_rhs : set_bits(other._value[bit_i])) {
-        found_one = true;
         if (bit_i < kPrecision || no_carry_viable.test(bit_i - kPrecision)) {
           uint64_t result = viable_lhs + viable_rhs;
           viables.set(result & result_mask);
@@ -36,12 +34,41 @@ Integer<Precision, BitWidth> Integer<Precision, BitWidth>::add(
             no_carry_viable.set(bit_i);
         }
       }
-      if (!found_one)
-        continue;
     }
   }
 
   return result;
+}
+
+template <unsigned Precision, unsigned BitWidth>
+Integer<Precision, BitWidth> Integer<Precision, BitWidth>::bitwise_not() const {
+  SelfTy result;
+
+  auto clear_last_n_bits = [](uint64_t val, unsigned numbits) {
+    return (val >> numbits) << numbits;
+  };
+
+  for (unsigned bit_i = 0; bit_i < kBitWidth; bit_i++)
+    for (uint64_t viable : set_bits(_value[bit_i])) {
+      uint64_t to_set = (~viable) & (kPrecisionStates - 1);
+      if (bit_i < kPrecision)
+        // Not needed for correctness, but important for canonicalization.
+        to_set = clear_last_n_bits(to_set, kPrecision - bit_i - 1);
+      result._value[bit_i].set(to_set);
+    }
+
+  return result;
+}
+
+template <unsigned Precision, unsigned BitWidth>
+Integer<Precision, BitWidth>
+Integer<Precision, BitWidth>::subtract(const SelfTy &other) const {
+  return add(other.negate());
+}
+
+template <unsigned Precision, unsigned BitWidth>
+Integer<Precision, BitWidth> Integer<Precision, BitWidth>::negate() const {
+  return bitwise_not().add(SelfTy(1));
 }
 
 template <unsigned Precision, unsigned BitWidth>

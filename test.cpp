@@ -52,9 +52,12 @@ public:
 #define ASSERT_EQ(v0, v1)                                                      \
   do {                                                                         \
     const char *msg = "equality failed, expected " #v0 " == " #v1;             \
-    if ((v0) != (v1))                                                          \
+    if ((v0) != (v1)) {                                                        \
+      /* TODO: fix repeat evaluation */                                        \
+      std::cerr << #v0 " = " << v0 << "\n";                                    \
+      std::cerr << #v1 " = " << v1 << "\n";                                    \
       __ctx.check_failed(msg, __LINE__, __FILE__, __func__);                   \
-    else                                                                       \
+    } else                                                                     \
       __ctx.check_passed();                                                    \
   } while (false)
 
@@ -120,6 +123,58 @@ static void test_additions() {
   }
 }
 
+static std::string sign_extend_to_64(const char *val) {
+  return std::string(64 - strlen(val), val[0]) + val;
+}
+
+static void test_subtractions() {
+  TEST("Subtract");
+
+  {
+    Int64 bin_57("111001"), bin_133("10000101"), bin_76("1001100");
+
+    ASSERT_TRUE(bin_57.admits(57));
+    ASSERT_TRUE(bin_133.admits(133));
+    ASSERT_TRUE(bin_76.admits(76));
+
+    ASSERT_EQ(bin_133.negate().write(), sign_extend_to_64("101111011"));
+    ASSERT_EQ(bin_76.negate().write(), sign_extend_to_64("10110100"));
+    ASSERT_EQ(bin_57.negate().write(), sign_extend_to_64("1000111"));
+
+    auto diff_133_76 = bin_133.subtract(bin_76);
+    auto diff_133_57 = bin_133.subtract(bin_57);
+
+    ASSERT_EQ(diff_133_76, bin_57);
+    ASSERT_EQ(diff_133_57, bin_76);
+  }
+
+  {
+    Int64 bin_57("1u1001"), bin_133("10000u01"), bin_76("1001u00");
+
+    ASSERT_TRUE(bin_57.admits(57));
+    ASSERT_TRUE(bin_133.admits(133));
+    ASSERT_TRUE(bin_76.admits(76));
+
+    auto diff_133_76 = bin_133.subtract(bin_76);
+    ASSERT_EQ(diff_133_76.write(), "11uu01");
+    ASSERT_FALSE(diff_133_76.admits(49));
+    ASSERT_FALSE(diff_133_76.admits(50));
+    ASSERT_TRUE(diff_133_76.admits(53));
+    ASSERT_TRUE(diff_133_76.admits(57));
+    ASSERT_TRUE(diff_133_76.admits(61));
+
+    auto diff_133_57 = bin_133.subtract(bin_57);
+    ASSERT_EQ(diff_133_57.write(), "10u1u00");
+    ASSERT_TRUE(diff_133_57.admits(72));
+    ASSERT_TRUE(diff_133_57.admits(76));
+    ASSERT_TRUE(diff_133_57.admits(88));
+    ASSERT_TRUE(diff_133_57.admits(92));
+    ASSERT_FALSE(diff_133_57.admits(0));
+    ASSERT_FALSE(diff_133_57.admits(18));
+  }
+}
+
 int main() {
   test_additions();
+  test_subtractions();
 }

@@ -92,9 +92,11 @@ public:
 
   Integer(unsigned val) {
     assert((val == 0 || val == 1) && "Others not supported!");
-    _value[0].set(val);
-    for (unsigned bit_idx = 1; bit_idx < kBitWidth; bit_idx++)
-      _value[bit_idx].set(0);
+    uint64_t iter = val << (kPrecision - 1);
+    for (unsigned bit_idx = 0; bit_idx < kBitWidth; bit_idx++) {
+      _value[bit_idx].set(iter);
+      iter >>= 1;
+    }
   }
 
   typedef Integer<Precision, BitWidth> SelfTy;
@@ -103,6 +105,9 @@ public:
   bool operator!=(const SelfTy &other) const { return _value != other._value; }
 
   SelfTy add(const SelfTy &other) const;
+  SelfTy bitwise_not() const;
+  SelfTy negate() const;
+  SelfTy subtract(const SelfTy &other) const;
   SelfTy left_shift(unsigned amount) const;
 
   void coerce_bit(unsigned bit_idx, bool *known_one, bool *know_zero) const;
