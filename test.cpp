@@ -108,6 +108,16 @@ static void test_additions() {
     ASSERT_FALSE(sum_57_133.admits(200));
     ASSERT_FALSE(sum_57_133.admits(95));
   }
+
+  {
+    Int64 bin_8a("uuu"), bin_8b("uuu");
+    Int64 bin_16 = bin_8a.add(bin_8b);
+
+    for (unsigned i = 0; i < 15; i++)
+      ASSERT_TRUE(bin_16.admits(i));
+    for (unsigned i = 15; i < 32; i++)
+      ASSERT_FALSE(bin_16.admits(i));
+  }
 }
 
 int main() {
